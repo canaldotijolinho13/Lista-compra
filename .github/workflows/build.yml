@@ -17,6 +17,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - run: bash setup.sh
+      - name: Corrigir linha truncada
+        run: |
+          sed -i 's/DIRECTORY_DOWNLO \+}/DIRECTORY_DOWNLOADS)/' app/src/main/java/br/com/lista/MainActivity.kt
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
