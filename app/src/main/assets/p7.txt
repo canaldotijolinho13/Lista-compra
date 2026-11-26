@@ -1,0 +1,141 @@
+<style>
+.geo{margin-top:14px}
+.geo h2{font-size:12px;font-weight:500;margin:0 0 8px;color:#6b7280}
+body.dark .geo h2{color:#9ca3af}
+.geo .btn{width:100%;padding:11px;background:#fff;border:1px solid #e5e7eb;color:#374151;border-radius:10px;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer}
+body.dark .geo .btn{background:#171a21;border-color:#2a2f3a;color:#e5e7eb}
+.geo .btn:disabled{opacity:.6}
+.geo .res{margin-top:10px;display:none;flex-direction:column;gap:8px}
+.geo .res.on{display:flex}
+.mk{background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px}
+body.dark .mk{background:#171a21;border-color:#2a2f3a}
+.mk .top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.mk .nm{font-size:14px;font-weight:500;color:#111827}
+body.dark .mk .nm{color:#e5e7eb}
+.mk .ds{font-size:11px;color:#6b7280;white-space:nowrap}
+.mk .ad{font-size:12px;color:#6b7280;margin-top:3px;line-height:1.4}
+.mk .go{display:inline-block;margin-top:7px;font-size:12px;color:#16a34a;text-decoration:none;font-weight:500}
+.geo .msg{font-size:12px;color:#6b7280;margin:8px 0 0}
+</style>
+<script>
+(function () {
+  var sec = document.createElement('section');
+  sec.className = 'geo';
+  var h = document.createElement('h2');
+  h.textContent = 'Mercados próximos';
+  var btn = document.createElement('button');
+  btn.className = 'btn';
+  btn.id = 'geoBtn';
+  btn.textContent = 'Usar minha localização';
+  var res = document.createElement('div');
+  res.className = 'res';
+  res.id = 'geoRes';
+  var msg = document.createElement('p');
+  msg.className = 'msg';
+  msg.id = 'geoMsg';
+  sec.appendChild(h); sec.appendChild(btn); sec.appendChild(res); sec.appendChild(msg);
+
+  var foot = document.querySelector('.foot');
+  if (foot && foot.parentNode) foot.parentNode.insertBefore(sec, foot);
+  else document.body.appendChild(sec);
+
+  function metros(d) { return d < 1000 ? Math.round(d) + ' m' : (d / 1000).toFixed(1).replace('.', ',') + ' km'; }
+
+  function distancia(a, b, c, d) {
+    var R = 6371000, t = Math.PI / 180;
+    var dLat = (c - a) * t, dLon = (d - b) * t;
+    var x = Math.pow(Math.sin(dLat / 2), 2) + Math.cos(a * t) * Math.cos(c * t) * Math.pow(Math.sin(dLon / 2), 2);
+    return 2 * R * Math.asin(Math.sqrt(x));
+  }
+
+  function endereco(t) {
+    var rua = (t['addr:street'] || '') + (t['addr:housenumber'] ? ', ' + t['addr:housenumber'] : '');
+    var bairro = t['addr:suburb'] || t['addr:district'] || '';
+    var cidade = t['addr:city'] || '';
+    var partes = [rua, bairro, cidade].filter(function (p) { return p; });
+    return partes.length ? partes.join(' - ') : 'Endereço não informado no mapa';
+  }
+
+  function mostrar(lista, la, lo) {
+    res.textContent = '';
+    if (!lista.length) {
+      msg.textContent = 'Nenhum mercado num raio de 3 km.';
+      btn.disabled = false;
+      return;
+    }
+    msg.textContent = lista.length + ' resultado(s), do mais perto para o mais longe.';
+    lista.forEach(function (m) {
+      var card = document.createElement('div');
+      card.className = 'mk';
+      var top = document.createElement('div');
+      top.className = 'top';
+      var nm = document.createElement('span');
+      nm.className = 'nm';
+      nm.textContent = m.nome;
+      var ds = document.createElement('span');
+      ds.className = 'ds';
+      ds.textContent = metros(m.d);
+      top.appendChild(nm); top.appendChild(ds);
+      var ad = document.createElement('div');
+      ad.className = 'ad';
+      ad.textContent = m.end;
+      var go = document.createElement('a');
+      go.className = 'go';
+      go.href = 'https://www.google.com/maps/search/?api=1&query=' + m.la + ',' + m.lo;
+      go.textContent = 'Abrir no mapa';
+      card.appendChild(top); card.appendChild(ad); card.appendChild(go);
+      res.appendChild(card);
+    });
+    res.classList.add('on');
+    btn.disabled = false;
+  }
+
+  function falhou(e) {
+    btn.disabled = false;
+    msg.textContent = (e && e.code === 1)
+      ? 'Permissão de localização negada. Libere o acesso nas configurações do app.'
+      : 'Não foi possível obter a localização. Tente de novo.';
+  }
+
+  function achou(pos) {
+    var la = pos.coords.latitude, lo = pos.coords.longitude;
+    msg.textContent = 'Consultando mercados num raio de 3 km...';
+    var q = '[out:json][timeout:25];(node["shop"~"supermarket|convenience"](around:3000,' + la + ',' + lo + ');way["shop"~"supermarket|convenience"](around:3000,' + la + ',' + lo + '););out center 40;';
+    fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(q)
+    }).then(function (r) {
+      if (!r.ok) throw new Error('http');
+      return r.json();
+    }).then(function (j) {
+      var lista = [];
+      (j.elements || []).forEach(function (el) {
+        var t = el.tags || {};
+        var plat = el.lat != null ? el.lat : (el.center && el.center.lat);
+        var plon = el.lon != null ? el.lon : (el.center && el.center.lon);
+        if (plat == null || plon == null) return;
+        lista.push({
+          nome: t.name || 'Mercado sem nome',
+          end: endereco(t),
+          la: plat, lo: plon,
+          d: distancia(la, lo, plat, plon)
+        });
+      });
+      lista.sort(function (a, b) { return a.d - b.d; });
+      mostrar(lista.slice(0, 15), la, lo);
+    }).catch(function () {
+      btn.disabled = false;
+      msg.textContent = 'Falha ao consultar o serviço de mapas. Tente de novo em instantes.';
+    });
+  }
+
+  btn.addEventListener('click', function () {
+    if (!navigator.geolocation) { msg.textContent = 'Este aparelho não expõe localização.'; return; }
+    btn.disabled = true;
+    msg.textContent = 'Obtendo localização...';
+    res.textContent = '';
+    res.classList.remove('on');
+    navigator.geolocation.getCurrentPosition(achou, falhou, { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 });
+  });
+})();
+</script>
