@@ -22,15 +22,25 @@ jobs:
           cat app/src/main/assets/p5.txt >> app/src/main/assets/index.html
           cat app/src/main/assets/p6.txt >> app/src/main/assets/index.html
           cat app/src/main/assets/p7.txt >> app/src/main/assets/index.html
+      - name: Preparar chave de assinatura
+        run: |
+          if [ ! -f keystore.jks ]; then
+            keytool -genkeypair -keystore keystore.jks -alias lista -keyalg RSA -keysize 2048 -validity 10000 -storepass lista123 -keypass lista123 -dname "CN=Phillip Almeida, O=Lista, C=BR"
+            git config user.name "github-actions"
+            git config user.email "actions@users.noreply.github.com"
+            git add keystore.jks
+            git commit -m "chave de assinatura [skip ci]"
+            git push
+          fi
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - run: gradle assembleDebug --no-daemon
+      - run: gradle assembleRelease --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: apk-release
+          path: app/build/outputs/apk/release/app-release.apk
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          files: app/build/outputs/apk/debug/app-debug.apk
+          tag_name: v1.1.${{ github.run_number }}
+          files: app/build/outputs/apk/release/app-release.apk
