@@ -1,0 +1,293 @@
+<script>
+(function () {
+  var KEY = 'lista_compras_v2';
+  var brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+  var n2 = function (v) { return v.toFixed(2).replace('.', ','); };
+  var $ = function (id) { return document.getElementById(id); };
+  var CATS = ['Hortifruti','Açougue e peixaria','Frios e laticínios','Padaria','Mercearia','Bebidas','Congelados','Limpeza','Higiene e beleza','Pet','Outros'];
+  var budget = 0;
+  var state = [];
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (raw) {
+      var p = JSON.parse(raw);
+      budget = Number(p.budget) || 0;
+      state = p.items || [];
+    }
+  } catch (e) { state = []; }
+  var save = function () { try { localStorage.setItem(KEY, JSON.stringify({ budget: budget, items: state })); } catch (e) {} };
+  var parsePrice = function (raw) {
+    var s = String(raw).replace(/[^\d.,]/g, '');
+    if (!s) return 0;
+    if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+    var v = parseFloat(s);
+    return isNaN(v) ? 0 : v;
+  };
+  var parseQty = function (raw) {
+    var v = parseFloat(String(raw).replace(',', '.'));
+    return isNaN(v) || v <= 0 ? 1 : v;
+  };
+  CATS.forEach(function (c) {
+    var o = document.createElement('option');
+    o.value = c; o.textContent = c;
+    $('newCat').appendChild(o);
+  });
+  $('newCat').value = 'Mercearia';
+  function totals() {
+    var all = 0, done = 0, count = 0, marked = 0;
+    state.forEach(function (it) {
+      var l = it.qty * it.price;
+      all += l; count++;
+      if (it.done) { done += l; marked++; }
+    });
+    return { all: all, done: done, count: count, marked: marked };
+  }
+  function refresh() {
+    var t = totals();
+    var over = budget > 0 && t.all > budget;
+    $('total').textContent = brl.format(t.all);
+    $('total').classList.toggle('over', over);
+    $('doneTotal').textContent = brl.format(t.done);
+    $('prog').textContent = t.count ? t.marked + ' de ' + t.count + ' marcados' : '0 de 0 marcados';
+    $('sub').textContent = t.count ? t.count + (t.count === 1 ? ' item na lista' : ' itens na lista') : 'Nenhum item';
+    $('empty').style.display = t.count ? 'none' : 'block';
+    var ratio = budget > 0 ? Math.min(t.all / budget, 1) : (t.count ? t.marked / t.count : 0);
+    $('bar').style.width = (ratio * 100) + '%';
+    $('bar').classList.toggle('over', over);
+    var st = $('status');
+    if (!budget) { st.textContent = ''; st.className = 'status'; }
+    else if (over) { st.textContent = 'estourou ' + brl.format(t.all - budget); st.className = 'status bad'; }
+    else { st.textContent = 'faltam ' + brl.format(budget - t.all); st.className = 'status ok'; }
+    var w = $('warn');
+    w.classList.toggle('on', over);
+    if (over) w.textContent = 'Orçamento estourado em ' + brl.format(t.all - budget) + '.';
+  }
+  function row(it) {
+    var li = document.createElement('li');
+    li.dataset.id = it.id;
+    if (it.done) li.classList.add('done');
+    var l1 = document.createElement('div'); l1.className = 'l1';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = it.done; cb.dataset.act = 'toggle';
+    var name = document.createElement('input');
+    name.className = 'name'; name.value = it.name; name.dataset.field = 'name';
+    var del = document.createElement('button');
+    del.className = 'del'; del.textContent = '×'; del.dataset.act = 'del';
+    l1.appendChild(cb); l1.appendChild(name); l1.appendChild(del);
+    var l2 = document.createElement('div'); l2.className = 'l2';
+    var step = document.createElement('div'); step.className = 'step';
+    var minus = document.createElement('button');
+    minus.textContent = '−'; minus.dataset.act = 'minus';
+    var qty = document.createElement('input');
+    qty.inputMode = 'decimal'; qty.value = String(it.qty).replace('.', ','); qty.dataset.field = 'qty';
+    var plus = document.createElement('button');
+    plus.textContent = '+'; plus.dataset.act = 'plus';
+    step.appendChild(minus); step.appendChild(qty); step.appendChild(plus);
+    var unit = document.createElement('div'); unit.className = 'money unit';
+    var pre = document.createElement('span'); pre.textContent = 'R$';
+    var price = document.createElement('input');
+    price.inputMode = 'decimal'; price.value = it.price ? n2(it.price) : ''; price.placeholder = '0,00';
+    price.dataset.field = 'price';
+    unit.appendChild(pre); unit.appendChild(price);
+    var line = document.createElement('span');
+    line.className = 'line'; line.textContent = brl.format(it.qty * it.price);
+    l2.appendChild(step); l2.appendChild(unit); l2.appendChild(line);
+    var cat = document.createElement('select');
+    cat.className = 'cat'; cat.dataset.field = 'cat';
+    CATS.forEach(function (c) {
+      var o = document.createElement('option');
+      o.value = c; o.textContent = c;
+      if (c === it.cat) o.selected = true;
+      cat.appendChild(o);
+    });
+    li.appendChild(l1); li.appendChild(l2); li.appendChild(cat);
+    return li;
+  }
+  function render() {
+    var box = $('groups');
+    box.textContent = '';
+    CATS.forEach(function (cat) {
+      var items = state.filter(function (i) { return i.cat === cat; });
+      if (!items.length) return;
+      var sec = document.createElement('section');
+      sec.className = 'group';
+      sec.dataset.cat = cat;
+      var head = document.createElement('div');
+      head.className = 'ghead';
+      var gn = document.createElement('span');
+      gn.className = 'gname'; gn.textContent = cat;
+      var gs = document.createElement('span');
+      gs.className = 'gsub';
+      gs.textContent = brl.format(items.reduce(function (s, i) { return s + i.qty * i.price; }, 0));
+      head.appendChild(gn); head.appendChild(gs);
+      var ul = document.createElement('ul');
+      items.forEach(function (i) { ul.appendChild(row(i)); });
+      sec.appendChild(head); sec.appendChild(ul);
+      box.appendChild(sec);
+    });
+    refresh();
+  }
+  function refreshGroup(cat) {
+    var sec = document.querySelector('.group[data-cat="' + cat + '"]');
+    if (!sec) return;
+    var sum = state.filter(function (i) { return i.cat === cat; }).reduce(function (s, i) { return s + i.qty * i.price; }, 0);
+    sec.querySelector('.gsub').textContent = brl.format(sum);
+  }
+  function find(el) {
+    var li = el.closest('li');
+    if (!li) return null;
+    var id = li.dataset.id;
+    return state.filter(function (x) { return x.id === id; })[0] || null;
+  }
+  $('groups').addEventListener('input', function (e) {
+    var it = find(e.target);
+    if (!it) return;
+    var f = e.target.dataset.field;
+    if (f === 'name') it.name = e.target.value;
+    else if (f === 'qty') it.qty = parseQty(e.target.value);
+    else if (f === 'price') it.price = parsePrice(e.target.value);
+    else return;
+    e.target.closest('li').querySelector('.line').textContent = brl.format(it.qty * it.price);
+    save(); refresh(); refreshGroup(it.cat);
+  });
+  $('groups').addEventListener('change', function (e) {
+    var it = find(e.target);
+    if (!it) return;
+    if (e.target.dataset.act === 'toggle') {
+      it.done = e.target.checked;
+      e.target.closest('li').classList.toggle('done', it.done);
+      save(); refresh();
+    } else if (e.target.dataset.field === 'cat') {
+      it.cat = e.target.value;
+      save(); render();
+    }
+  });
+  $('groups').addEventListener('click', function (e) {
+    var act = e.target.dataset.act;
+    if (!act || act === 'toggle') return;
+    var it = find(e.target);
+    if (!it) return;
+    var li = e.target.closest('li');
+    if (act === 'del') {
+      var cat = it.cat;
+      state = state.filter(function (x) { return x.id !== it.id; });
+      var sec = li.closest('.group');
+      li.remove();
+      if (sec && !sec.querySelector('li')) sec.remove(); else refreshGroup(cat);
+    } else if (act === 'plus' || act === 'minus') {
+      it.qty = Math.max(1, Math.round((it.qty + (act === 'plus' ? 1 : -1)) * 100) / 100);
+      li.querySelector('[data-field=qty]').value = String(it.qty).replace('.', ',');
+      li.querySelector('.line').textContent = brl.format(it.qty * it.price);
+      refreshGroup(it.cat);
+    }
+    save(); refresh();
+  });
+  $('groups').addEventListener('blur', function (e) {
+    var it = find(e.target);
+    if (!it) return;
+    var f = e.target.dataset.field;
+    if (f === 'price') e.target.value = it.price ? n2(it.price) : '';
+    else if (f === 'qty') e.target.value = String(it.qty).replace('.', ',');
+  }, true);
+  $('budget').addEventListener('input', function (e) { budget = parsePrice(e.target.value); save(); refresh(); });
+  $('budget').addEventListener('blur', function (e) { e.target.value = budget ? n2(budget) : ''; save(); });
+  function addItem() {
+    var name = $('newName').value.trim();
+    if (!name) { $('newName').focus(); return; }
+    var it = { id: 'i' + Date.now(), name: name, qty: parseQty($('newQty').value), price: parsePrice($('newPrice').value), done: false, cat: $('newCat').value };
+    state.push(it);
+    $('newName').value = ''; $('newQty').value = '1'; $('newPrice').value = '';
+    $('newName').focus();
+    save(); render();
+  }
+  $('addBtn').addEventListener('click', addItem);
+  $('newName').addEventListener('keydown', function (e) { if (e.key === 'Enter') addItem(); });
+  $('newPrice').addEventListener('keydown', function (e) { if (e.key === 'Enter') addItem(); });
+  $('clearDone').addEventListener('click', function () {
+    state = state.filter(function (i) { return !i.done; });
+    save(); render();
+  });
+  $('clearAll').addEventListener('click', function () {
+    state = [];
+    save(); render();
+  });
+  function exportLines() {
+    var t = totals();
+    var out = ['LISTA DE COMPRAS', '', 'Total: ' + brl.format(t.all)];
+    if (budget > 0) out.push('Orçamento: ' + brl.format(budget) + (t.all > budget ? ' — estourou ' + brl.format(t.all - budget) : ' — faltam ' + brl.format(budget - t.all)));
+    out.push('');
+    CATS.forEach(function (cat) {
+      var items = state.filter(function (i) { return i.cat === cat; });
+      if (!items.length) return;
+      out.push(cat.toUpperCase() + ' — ' + brl.format(items.reduce(function (s, i) { return s + i.qty * i.price; }, 0)));
+      items.forEach(function (i) {
+        out.push((i.done ? '[x] ' : '[ ] ') + i.name + ' — ' + i.qty + ' × ' + brl.format(i.price) + ' = ' + brl.format(i.qty * i.price));
+      });
+      out.push('');
+    });
+    out.push(t.marked + ' de ' + t.count + ' itens marcados');
+    return out;
+  }
+  function buildText() { return exportLines().join('\n'); }
+  $('exportBtn').addEventListener('click', function () {
+    $('preview').value = state.length ? buildText() : 'A lista está vazia.';
+    $('panel').classList.add('on');
+  });
+  $('closeBtn').addEventListener('click', function () { $('panel').classList.remove('on'); });
+  $('copyBtn').addEventListener('click', function () {
+    var txt = buildText();
+    if (navigator.clipboard) { navigator.clipboard.writeText(txt).catch(function () { $('preview').select(); document.execCommand('copy'); }); }
+    else { $('preview').select(); document.execCommand('copy'); }
+    $('copyBtn').textContent = 'Copiado';
+    setTimeout(function () { $('copyBtn').textContent = 'Copiar texto'; }, 1600);
+  });
+  function download(blob, filename) {
+    if (window.AndroidBridge && window.AndroidBridge.saveFile) {
+      var fr = new FileReader();
+      fr.onloadend = function () {
+        window.AndroidBridge.saveFile(String(fr.result).split(',')[1], filename, blob.type || 'application/octet-stream');
+      };
+      fr.readAsDataURL(blob);
+      return;
+    }
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+  $('txtBtn').addEventListener('click', function () {
+    download(new Blob([buildText()], { type: 'text/plain;charset=utf-8' }), 'lista-de-compras.txt');
+  });
+  $('imgBtn').addEventListener('click', function () {
+    if (!state.length) return;
+    var W = 720, PAD = 40, LH = 26;
+    var c = document.createElement('canvas');
+    var ctx = c.getContext('2d');
+    var flat = [];
+    exportLines().forEach(function (line) {
+      ctx.font = '400 14px sans-serif';
+      var cur = '';
+      line.split(' ').forEach(function (w) {
+        var test = cur ? cur + ' ' + w : w;
+        if (ctx.measureText(test).width > W - PAD * 2 && cur) { flat.push(cur); cur = w; }
+        else cur = test;
+      });
+      if (cur) flat.push(cur);
+    });
+    c.width = W; c.height = PAD * 2 + flat.length * LH;
+    ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, W, c.height);
+    ctx.fillStyle = '#111827';
+    ctx.font = '400 14px sans-serif';
+    var y = PAD + 18;
+    flat.forEach(function (line) { ctx.fillText(line, PAD, y); y += LH; });
+    c.toBlob(function (b) { download(b, 'lista-de-compras.png'); });
+  });
+  render();
+})();
+</script>
+</body>
+</html>
