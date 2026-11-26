@@ -1,0 +1,56 @@
+<style>
+body.dark{background:#0f1115;color:#e5e7eb}
+body.dark .sub,body.dark .lbl,body.dark .gname,body.dark .gsub,body.dark .hint,body.dark .status,body.dark .total-mini,body.dark .del,body.dark .cat{color:#9ca3af}
+body.dark .card,body.dark .add,body.dark li,body.dark .panel{background:#171a21;border-color:#2a2f3a}
+body.dark input,body.dark select,body.dark textarea{background:#10131a;border-color:#2a2f3a;color:#e5e7eb}
+body.dark .name{background:transparent;border:none}
+body.dark .step{background:#10131a;border-color:#2a2f3a}
+body.dark .step input{border-color:#2a2f3a;color:#e5e7eb}
+body.dark .step button{color:#e5e7eb}
+body.dark .ghost{background:#171a21;border-color:#2a2f3a;color:#9ca3af}
+body.dark .empty{border-color:#2a2f3a}
+body.dark .bar{background:#2a2f3a}
+body.dark .ghead{border-bottom-color:#2a2f3a}
+body.dark .budget{border-top-color:#2a2f3a}
+body.dark .warn{background:#2a1215;border-color:#7f1d1d;color:#fca5a5}
+body.dark .money span{color:#6b7280}
+body.dark .total{color:#e5e7eb}
+body.dark .total.over{color:#f87171}
+body.dark .status.bad{color:#f87171}
+body.dark .btn-primary{background:#16a34a;color:#fff}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.head .left{flex:1;min-width:0}
+#tema{flex:0 0 auto;padding:7px 10px;font-size:12px;background:#f3f4f6;border:1px solid #e5e7eb;color:#374151;border-radius:999px;white-space:nowrap}
+body.dark #tema{background:#171a21;border-color:#2a2f3a;color:#e5e7eb}
+</style>
+<script>
+(function(){
+  var KEY='lista_tema';
+  function aplicar(tema){
+    document.body.classList.toggle('dark', tema==='escuro');
+    var b=document.getElementById('tema');
+    if(b) b.textContent = tema==='escuro' ? 'Modo claro' : 'Modo escuro';
+  }
+  var h1=document.querySelector('h1');
+  var sub=document.getElementById('sub');
+  var head=document.createElement('div');
+  head.className='head';
+  var left=document.createElement('div');
+  left.className='left';
+  h1.parentNode.insertBefore(head,h1);
+  left.appendChild(h1);
+  left.appendChild(sub);
+  var btn=document.createElement('button');
+  btn.id='tema';
+  btn.type='button';
+  btn.textContent='Modo escuro';
+  head.appendChild(left);
+  head.appendChild(btn);
+  aplicar(localStorage.getItem(KEY)==='escuro' ? 'escuro' : 'claro');
+  btn.addEventListener('click', function(){
+    var novo = document.body.classList.contains('dark') ? 'claro' : 'escuro';
+    localStorage.setItem(KEY, novo);
+    aplicar(novo);
+  });
+})();
+</script>
