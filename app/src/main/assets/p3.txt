@@ -1,0 +1,154 @@
+<script>
+(function () {
+  var KEY = 'lista_compras_v2';
+  var brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+  var n2 = function (v) { return v.toFixed(2).replace('.', ','); };
+  var $ = function (id) { return document.getElementById(id); };
+  var CATS = ['Hortifruti','Açougue e peixaria','Frios e laticínios','Padaria','Mercearia','Bebidas','Congelados','Limpeza','Higiene e beleza','Pet','Outros'];
+  var seq = 0;
+  var uid = function () { seq++; return 'i' + seq + Date.now().toString(36); };
+  var budget = 0;
+  var state = [];
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (raw) {
+      var p = JSON.parse(raw);
+      budget = Number(p.budget) || 0;
+      state = (p.items || []).map(function (i) {
+        return { id: i.id || uid(), name: i.name || '', qty: Number(i.qty) || 1, price: Number(i.price) || 0, done: !!i.done, cat: CATS.indexOf(i.cat) >= 0 ? i.cat : 'Outros' };
+      });
+    }
+  } catch (e) { state = []; }
+  if (!state.length && !localStorage.getItem(KEY)) {
+    state = [
+      { id: uid(), name: 'Arroz 5 kg', qty: 1, price: 27.9, done: false, cat: 'Mercearia' },
+      { id: uid(), name: 'Leite integral 1 L', qty: 2, price: 5.49, done: false, cat: 'Frios e laticínios' },
+      { id: uid(), name: 'Detergente 500 ml', qty: 1, price: 3.19, done: false, cat: 'Limpeza' }
+    ];
+  }
+  var save = function () { try { localStorage.setItem(KEY, JSON.stringify({ budget: budget, items: state })); } catch (e) {} };
+  var parsePrice = function (raw) {
+    var s = String(raw).replace(/[^\d.,]/g, '');
+    if (!s) return 0;
+    if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+    else if (s.split('.').length > 2) s = s.split('.').join('');
+    var v = parseFloat(s);
+    return isNaN(v) ? 0 : v;
+  };
+  var parseQty = function (raw) {
+    var v = parseFloat(String(raw).replace(',', '.'));
+    return isNaN(v) || v <= 0 ? 1 : v;
+  };
+  CATS.forEach(function (c) {
+    var o = document.createElement('option');
+    o.value = c; o.textContent = c;
+    $('newCat').appendChild(o);
+  });
+  $('newCat').value = 'Mercearia';
+  function totals() {
+    var all = 0, done = 0, count = 0, marked = 0;
+    state.forEach(function (it) {
+      var l = it.qty * it.price;
+      all += l; count++;
+      if (it.done) { done += l; marked++; }
+    });
+    return { all: all, done: done, count: count, marked: marked };
+  }
+  function refresh() {
+    var t = totals();
+    var over = budget > 0 && t.all > budget;
+    $('total').textContent = brl.format(t.all);
+    $('total').classList.toggle('over', over);
+    $('doneTotal').textContent = brl.format(t.done);
+    $('prog').textContent = t.count ? t.marked + ' de ' + t.count + ' marcados' : '0 de 0 marcados';
+    $('sub').textContent = t.count ? t.count + (t.count === 1 ? ' item na lista' : ' itens na lista') : 'Nenhum item';
+    $('empty').style.display = t.count ? 'none' : 'block';
+    var ratio = budget > 0 ? Math.min(t.all / budget, 1) : (t.count ? t.marked / t.count : 0);
+    $('bar').style.width = (ratio * 100) + '%';
+    $('bar').classList.toggle('over', over);
+    var st = $('status');
+    if (!budget) { st.textContent = ''; st.className = 'status'; }
+    else if (over) { st.textContent = 'estourou ' + brl.format(t.all - budget); st.className = 'status bad'; }
+    else { st.textContent = 'faltam ' + brl.format(budget - t.all); st.className = 'status ok'; }
+    var w = $('warn');
+    w.classList.toggle('on', over);
+    if (over) w.textContent = 'Orçamento estourado em ' + brl.format(t.all - budget) + '.';
+  }
+  function row(it) {
+    var li = document.createElement('li');
+    li.dataset.id = it.id;
+    if (it.done) li.classList.add('done');
+    var l1 = document.createElement('div'); l1.className = 'l1';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = it.done; cb.dataset.act = 'toggle';
+    var name = document.createElement('input');
+    name.className = 'name'; name.value = it.name; name.dataset.field = 'name';
+    var del = document.createElement('button');
+    del.className = 'del'; del.textContent = '×'; del.dataset.act = 'del';
+    l1.appendChild(cb); l1.appendChild(name); l1.appendChild(del);
+    var l2 = document.createElement('div'); l2.className = 'l2';
+    var step = document.createElement('div'); step.className = 'step';
+    var minus = document.createElement('button');
+    minus.textContent = '−'; minus.dataset.act = 'minus';
+    var qty = document.createElement('input');
+    qty.inputMode = 'decimal'; qty.value = String(it.qty).replace('.', ','); qty.dataset.field = 'qty';
+    var plus = document.createElement('button');
+    plus.textContent = '+'; plus.dataset.act = 'plus';
+    step.appendChild(minus); step.appendChild(qty); step.appendChild(plus);
+    var unit = document.createElement('div'); unit.className = 'money unit';
+    var pre = document.createElement('span'); pre.textContent = 'R$';
+    var price = document.createElement('input');
+    price.inputMode = 'decimal'; price.value = it.price ? n2(it.price) : ''; price.placeholder = '0,00';
+    price.dataset.field = 'price';
+    unit.appendChild(pre); unit.appendChild(price);
+    var line = document.createElement('span');
+    line.className = 'line'; line.textContent = brl.format(it.qty * it.price);
+    l2.appendChild(step); l2.appendChild(unit); l2.appendChild(line);
+    var cat = document.createElement('select');
+    cat.className = 'cat'; cat.dataset.field = 'cat';
+    CATS.forEach(function (c) {
+      var o = document.createElement('option');
+      o.value = c; o.textContent = c;
+      if (c === it.cat) o.selected = true;
+      cat.appendChild(o);
+    });
+    li.appendChild(l1); li.appendChild(l2); li.appendChild(cat);
+    return li;
+  }
+  function render() {
+    var box = $('groups');
+    box.textContent = '';
+    CATS.forEach(function (cat) {
+      var items = state.filter(function (i) { return i.cat === cat; });
+      if (!items.length) return;
+      var sec = document.createElement('section');
+      sec.className = 'group';
+      sec.dataset.cat = cat;
+      var head = document.createElement('div');
+      head.className = 'ghead';
+      var gn = document.createElement('span');
+      gn.className = 'gname'; gn.textContent = cat;
+      var gs = document.createElement('span');
+      gs.className = 'gsub';
+      gs.textContent = brl.format(items.reduce(function (s, i) { return s + i.qty * i.price; }, 0));
+      head.appendChild(gn); head.appendChild(gs);
+      var ul = document.createElement('ul');
+      items.forEach(function (i) { ul.appendChild(row(i)); });
+      sec.appendChild(head); sec.appendChild(ul);
+      box.appendChild(sec);
+    });
+    refresh();
+  }
+  function refreshGroup(cat) {
+    var sec = document.querySelector('.group[data-cat="' + cat + '"]');
+    if (!sec) return;
+    var sum = state.filter(function (i) { return i.cat === cat; }).reduce(function (s, i) { return s + i.qty * i.price; }, 0);
+    sec.querySelector('.gsub').textContent = brl.format(sum);
+  }
+  function find(el) {
+    var li = el.closest('li');
+    if (!li) return null;
+    var id = li.dataset.id;
+    return state.filter(function (x) { return x.id === id; })[0] || null;
+  }
+</script>
