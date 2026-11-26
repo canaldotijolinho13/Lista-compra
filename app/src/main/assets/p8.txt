@@ -1,0 +1,140 @@
+<style>
+#pdfRow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+</style>
+<script>
+(function () {
+  var painel = document.getElementById('panel');
+  if (!painel) return;
+
+  var row = document.createElement('div');
+  row.id = 'pdfRow';
+  var bPdf = document.createElement('button');
+  bPdf.className = 'ghost';
+  bPdf.textContent = 'Baixar PDF';
+  var bZap = document.createElement('button');
+  bZap.className = 'ghost';
+  bZap.textContent = 'Enviar no WhatsApp';
+  row.appendChild(bPdf); row.appendChild(bZap);
+  painel.appendChild(row);
+
+  function bytesDe(s) {
+    var b = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff;
+    return b;
+  }
+
+  function montarPdf(jpegB64, w, h) {
+    var bin = atob(jpegB64);
+    var img = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) img[i] = bin.charCodeAt(i);
+
+    var PW = 595.28, PH = 841.89, M = 18;
+    var e = Math.min((PW - M * 2) / w, (PH - M * 2) / h);
+    var dw = w * e, dh = h * e;
+    var x = (PW - dw) / 2, y = (PH - dh) / 2;
+    var conteudo = 'q\n' + dw.toFixed(2) + ' 0 0 ' + dh.toFixed(2) + ' ' + x.toFixed(2) + ' ' + y.toFixed(2) + ' cm\n/Im0 Do\nQ\n';
+
+    var partes = [], off = 0, pos = [];
+    function push(b) { partes.push(b); off += b.length; }
+    function obj(n, corpo) { pos[n] = off; push(bytesDe(n + ' 0 obj\n' + corpo + '\nendobj\n')); }
+
+    push(bytesDe('%PDF-1.4\n%\u00e2\u00e3\u00cf\u00d3\n'));
+    obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+    obj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+    obj(3, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + PW + ' ' + PH + '] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>');
+
+    pos[4] = off;
+    push(bytesDe('4 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + w + ' /Height ' + h + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + img.length + ' >>\nstream\n'));
+    push(img);
+    push(bytesDe('\nendstream\nendobj\n'));
+
+    obj(5, '<< /Length ' + conteudo.length + ' >>\nstream\n' + conteudo + 'endstream');
+
+    var xrefPos = off;
+    var xref = 'xref\n0 6\n0000000000 65535 f \n';
+    for (var i = 1; i <= 5; i++) xref += ('0000000000' + pos[i]).slice(-10) + ' 00000 n \n';
+    push(bytesDe(xref));
+    push(bytesDe('trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n' + xrefPos + '\n%%EOF\n'));
+
+    var total = 0;
+    partes.forEach(function (p) { total += p.length; });
+    var out = new Uint8Array(total), o = 0;
+    partes.forEach(function (p) { out.set(p, o); o += p.length; });
+    return out;
+  }
+
+  function gerar() {
+    document.getElementById('exportBtn').click();
+    var prev = document.getElementById('preview');
+    var texto = prev.value || '';
+    if (!texto || texto.indexOf('vazia') >= 0) return null;
+
+    var ESC = 2, FS = 12 * ESC, LH = 15 * ESC, PAD = 20 * ESC, LARG = 520 * ESC;
+    var c = document.createElement('canvas');
+    var ctx = c.getContext('2d');
+    ctx.font = '400 ' + FS + 'px ui-monospace,monospace';
+
+    var planas = [];
+    texto.split('\n').forEach(function (l) {
+      if (!l) { planas.push(''); return; }
+      var cur = '';
+      l.split(' ').forEach(function (w) {
+        var t = cur ? cur + ' ' + w : w;
+        if (ctx.measureText(t).width > LARG - PAD * 2 && cur) { planas.push(cur); cur = w; }
+        else cur = t;
+      });
+      if (cur) planas.push(cur);
+    });
+
+    c.width = LARG;
+    c.height = PAD * 2 + planas.length * LH;
+    ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = '#111827';
+    ctx.font = '400 ' + FS + 'px ui-monospace,monospace';
+    var y = PAD + FS;
+    planas.forEach(function (l) { ctx.fillText(l, PAD, y); y += LH; });
+
+    var b64 = c.toDataURL('image/jpeg', 0.92).split(',')[1];
+    return new Blob([montarPdf(b64, c.width, c.height)], { type: 'application/pdf' });
+  }
+
+  function baixar(blob) {
+    if (window.AndroidBridge && window.AndroidBridge.saveFile) {
+      var fr = new FileReader();
+      fr.onloadend = function () {
+        window.AndroidBridge.saveFile(String(fr.result).split(',')[1], 'minha-lista.pdf', 'application/pdf');
+      };
+      fr.readAsDataURL(blob);
+      return;
+    }
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'minha-lista.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  function enviar(blob) {
+    if (window.AndroidBridge && window.AndroidBridge.compartilhar) {
+      var fr = new FileReader();
+      fr.onloadend = function () {
+        window.AndroidBridge.compartilhar(String(fr.result).split(',')[1], 'minha-lista.pdf', 'application/pdf', 'com.whatsapp');
+      };
+      fr.readAsDataURL(blob);
+      return;
+    }
+    baixar(blob);
+  }
+
+  bPdf.addEventListener('click', function () {
+    var blob = gerar();
+    if (blob) baixar(blob);
+  });
+
+  bZap.addEventListener('click', function () {
+    var blob = gerar();
+    if (blob) enviar(blob);
+  });
+})();
+</script>
