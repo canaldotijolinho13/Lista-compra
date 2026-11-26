@@ -51,8 +51,16 @@ android {
         applicationId = "br.com.lista"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
+    }
+    signingConfigs {
+        create("release") {
+            storeFile = file("../keystore.jks")
+            storePassword = "lista123"
+            keyAlias = "lista"
+            keyPassword = "lista123"
+        }
     }
     buildFeatures {
         buildConfig = true
@@ -63,6 +71,12 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
+        }
     }
 }
 dependencies {
