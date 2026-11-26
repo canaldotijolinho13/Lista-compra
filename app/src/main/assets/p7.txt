@@ -7,84 +7,166 @@ body.dark .geo .btn{background:#171a21;border-color:#2a2f3a;color:#e5e7eb}
 .geo .btn:disabled{opacity:.6}
 .geo .res{margin-top:10px;display:none;flex-direction:column;gap:8px}
 .geo .res.on{display:flex}
+.geo .msg{font-size:12px;color:#6b7280;margin:8px 0 0}
 .mk{background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px}
 body.dark .mk{background:#171a21;border-color:#2a2f3a}
 .mk .top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
 .mk .nm{font-size:14px;font-weight:500;color:#111827}
 body.dark .mk .nm{color:#e5e7eb}
 .mk .ds{font-size:11px;color:#6b7280;white-space:nowrap}
+.mk .tp{font-size:11px;color:#6b7280;margin-top:2px}
 .mk .ad{font-size:12px;color:#6b7280;margin-top:3px;line-height:1.4}
-.mk .go{display:inline-block;margin-top:7px;font-size:12px;color:#16a34a;text-decoration:none;font-weight:500}
-.geo .msg{font-size:12px;color:#6b7280;margin:8px 0 0}
+.mk .acoes{display:flex;gap:12px;align-items:center;margin-top:7px}
+.mk .go{font-size:12px;color:#16a34a;text-decoration:none;font-weight:500}
+.mk .fav{background:transparent;border:none;font-size:12px;color:#6b7280;cursor:pointer;font-family:inherit;padding:0}
+.mk .fav.on{color:#d97706;font-weight:500}
+#favBox{display:none;margin-top:12px}
+#favBox.on{display:block}
+#favBox h3{font-size:11px;font-weight:500;color:#6b7280;margin:0 0 7px;letter-spacing:.03em}
+#favList{display:flex;flex-direction:column;gap:7px}
 </style>
 <script>
 (function () {
+  var KEY = 'mercados_fav';
+  var TIPOS = {
+    supermarket: 'Supermercado',
+    convenience: 'Conveniência',
+    greengrocer: 'Hortifrúti',
+    wholesale: 'Atacarejo'
+  };
+
   var sec = document.createElement('section');
   sec.className = 'geo';
   var h = document.createElement('h2');
   h.textContent = 'Mercados próximos';
   var btn = document.createElement('button');
-  btn.className = 'btn';
-  btn.id = 'geoBtn';
+  btn.className = 'btn'; btn.id = 'geoBtn';
   btn.textContent = 'Usar minha localização';
-  var res = document.createElement('div');
-  res.className = 'res';
-  res.id = 'geoRes';
   var msg = document.createElement('p');
-  msg.className = 'msg';
-  msg.id = 'geoMsg';
-  sec.appendChild(h); sec.appendChild(btn); sec.appendChild(res); sec.appendChild(msg);
+  msg.className = 'msg'; msg.id = 'geoMsg';
+  var res = document.createElement('div');
+  res.className = 'res'; res.id = 'geoRes';
+  var favBox = document.createElement('div');
+  favBox.id = 'favBox';
+  var favTit = document.createElement('h3');
+  favTit.textContent = 'Favoritos';
+  var favList = document.createElement('div');
+  favList.id = 'favList';
+  favBox.appendChild(favTit); favBox.appendChild(favList);
+
+  sec.appendChild(h); sec.appendChild(btn); sec.appendChild(favBox);
+  sec.appendChild(msg); sec.appendChild(res);
 
   var foot = document.querySelector('.foot');
   if (foot && foot.parentNode) foot.parentNode.insertBefore(sec, foot);
   else document.body.appendChild(sec);
 
-  function metros(d) { return d < 1000 ? Math.round(d) + ' m' : (d / 1000).toFixed(1).replace('.', ',') + ' km'; }
+  var favs = [];
+  try { favs = JSON.parse(localStorage.getItem(KEY) || '[]') || []; } catch (e) { favs = []; }
+  var ultimaPos = null;
 
+  function gravar() {
+    try { localStorage.setItem(KEY, JSON.stringify(favs)); } catch (e) {}
+  }
+  function metros(d) {
+    return d < 1000 ? Math.round(d) + ' m' : (d / 1000).toFixed(1).replace('.', ',') + ' km';
+  }
   function distancia(a, b, c, d) {
     var R = 6371000, t = Math.PI / 180;
     var dLat = (c - a) * t, dLon = (d - b) * t;
     var x = Math.pow(Math.sin(dLat / 2), 2) + Math.cos(a * t) * Math.cos(c * t) * Math.pow(Math.sin(dLon / 2), 2);
     return 2 * R * Math.asin(Math.sqrt(x));
   }
-
   function endereco(t) {
     var rua = (t['addr:street'] || '') + (t['addr:housenumber'] ? ', ' + t['addr:housenumber'] : '');
     var bairro = t['addr:suburb'] || t['addr:district'] || '';
     var cidade = t['addr:city'] || '';
-    var partes = [rua, bairro, cidade].filter(function (p) { return p; });
-    return partes.length ? partes.join(' - ') : 'Endereço não informado no mapa';
+    var p = [rua, bairro, cidade].filter(function (x) { return x; });
+    return p.length ? p.join(' - ') : 'Endereço não informado no mapa';
+  }
+  function mapa(la, lo) {
+    return 'https://www.google.com/maps/search/?api=1&query=' + la + ',' + lo;
+  }
+  function estaSalvo(m) {
+    return favs.some(function (f) { return f.la === m.la && f.lo === m.lo; });
+  }
+
+  function cartao(m, comDistancia) {
+    var c = document.createElement('div');
+    c.className = 'mk';
+    var top = document.createElement('div');
+    top.className = 'top';
+    var nm = document.createElement('span');
+    nm.className = 'nm'; nm.textContent = m.nome;
+    top.appendChild(nm);
+    if (comDistancia && ultimaPos) {
+      var ds = document.createElement('span');
+      ds.className = 'ds';
+      ds.textContent = metros(distancia(ultimaPos.la, ultimaPos.lo, m.la, m.lo));
+      top.appendChild(ds);
+    }
+    c.appendChild(top);
+
+    if (m.tipo && TIPOS[m.tipo]) {
+      var tp = document.createElement('div');
+      tp.className = 'tp';
+      tp.textContent = TIPOS[m.tipo];
+      c.appendChild(tp);
+    }
+    var ad = document.createElement('div');
+    ad.className = 'ad'; ad.textContent = m.end;
+    c.appendChild(ad);
+
+    var acoes = document.createElement('div');
+    acoes.className = 'acoes';
+    var go = document.createElement('a');
+    go.className = 'go'; go.href = mapa(m.la, m.lo); go.textContent = 'Abrir no mapa';
+    var fav = document.createElement('button');
+    fav.className = 'fav' + (estaSalvo(m) ? ' on' : '');
+    fav.textContent = estaSalvo(m) ? '★ Salvo' : '☆ Salvar';
+    fav.addEventListener('click', function () {
+      if (estaSalvo(m)) {
+        favs = favs.filter(function (f) { return !(f.la === m.la && f.lo === m.lo); });
+      } else {
+        favs.push({ nome: m.nome, end: m.end, la: m.la, lo: m.lo, tipo: m.tipo });
+      }
+      gravar(); renderFavs(); atualizarEstrelas();
+    });
+    acoes.appendChild(go); acoes.appendChild(fav);
+    c.appendChild(acoes);
+    return c;
+  }
+
+  function renderFavs() {
+    favList.textContent = '';
+    favBox.classList.toggle('on', favs.length > 0);
+    favs.forEach(function (f) { favList.appendChild(cartao(f, true)); });
+  }
+
+  function atualizarEstrelas() {
+    var cards = res.querySelectorAll('.mk');
+    for (var i = 0; i < cards.length; i++) {
+      var b = cards[i].querySelector('.fav');
+      if (!b) continue;
+      var m = { la: cards[i].dataset.la, lo: cards[i].dataset.lo };
+      var salvo = favs.some(function (f) { return String(f.la) === m.la && String(f.lo) === m.lo; });
+      b.className = 'fav' + (salvo ? ' on' : '');
+      b.textContent = salvo ? '★ Salvo' : '☆ Salvar';
+    }
   }
 
   function mostrar(lista, la, lo) {
     res.textContent = '';
     if (!lista.length) {
-      msg.textContent = 'Nenhum mercado num raio de 3 km.';
+      msg.textContent = 'Nenhum mercado num raio de 20 km.';
       btn.disabled = false;
       return;
     }
     msg.textContent = lista.length + ' resultado(s), do mais perto para o mais longe.';
     lista.forEach(function (m) {
-      var card = document.createElement('div');
-      card.className = 'mk';
-      var top = document.createElement('div');
-      top.className = 'top';
-      var nm = document.createElement('span');
-      nm.className = 'nm';
-      nm.textContent = m.nome;
-      var ds = document.createElement('span');
-      ds.className = 'ds';
-      ds.textContent = metros(m.d);
-      top.appendChild(nm); top.appendChild(ds);
-      var ad = document.createElement('div');
-      ad.className = 'ad';
-      ad.textContent = m.end;
-      var go = document.createElement('a');
-      go.className = 'go';
-      go.href = 'https://www.google.com/maps/search/?api=1&query=' + m.la + ',' + m.lo;
-      go.textContent = 'Abrir no mapa';
-      card.appendChild(top); card.appendChild(ad); card.appendChild(go);
-      res.appendChild(card);
+      var c = cartao(m, true);
+      c.dataset.la = m.la; c.dataset.lo = m.lo;
+      res.appendChild(c);
     });
     res.classList.add('on');
     btn.disabled = false;
@@ -99,8 +181,11 @@ body.dark .mk .nm{color:#e5e7eb}
 
   function achou(pos) {
     var la = pos.coords.latitude, lo = pos.coords.longitude;
-    msg.textContent = 'Consultando mercados num raio de 3 km...';
-    var q = '[out:json][timeout:25];(node["shop"~"supermarket|convenience"](around:3000,' + la + ',' + lo + ');way["shop"~"supermarket|convenience"](around:3000,' + la + ',' + lo + '););out center 40;';
+    ultimaPos = { la: la, lo: lo };
+    msg.textContent = 'Consultando mercados num raio de 20 km...';
+    var filtro = '["shop"~"supermarket|convenience|greengrocer|wholesale"]';
+    var area = '(around:20000,' + la + ',' + lo + ')';
+    var q = '[out:json][timeout:40];(node' + filtro + area + ';way' + filtro + area + ';);out center 80;';
     fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST',
       body: 'data=' + encodeURIComponent(q)
@@ -117,12 +202,13 @@ body.dark .mk .nm{color:#e5e7eb}
         lista.push({
           nome: t.name || 'Mercado sem nome',
           end: endereco(t),
+          tipo: t.shop,
           la: plat, lo: plon,
           d: distancia(la, lo, plat, plon)
         });
       });
       lista.sort(function (a, b) { return a.d - b.d; });
-      mostrar(lista.slice(0, 15), la, lo);
+      mostrar(lista.slice(0, 20), la, lo);
     }).catch(function () {
       btn.disabled = false;
       msg.textContent = 'Falha ao consultar o serviço de mapas. Tente de novo em instantes.';
@@ -137,5 +223,7 @@ body.dark .mk .nm{color:#e5e7eb}
     res.classList.remove('on');
     navigator.geolocation.getCurrentPosition(achou, falhou, { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 });
   });
+
+  renderFavs();
 })();
 </script>
