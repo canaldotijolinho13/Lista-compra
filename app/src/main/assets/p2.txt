@@ -1,0 +1,50 @@
+</head>
+<body>
+<h1>Lista de compras</h1>
+<p class="sub" id="sub">—</p>
+<div class="card">
+<div class="total-line">
+<span class="lbl">Total da compra</span>
+<span class="total" id="total">R$ 0,00</span>
+</div>
+<div class="total-mini">
+<span id="prog">0 de 0 marcados</span>
+<span class="v" id="doneTotal">R$ 0,00</span>
+</div>
+<div class="bar"><i id="bar"></i></div>
+<div class="budget">
+<label for="budget">Orçamento</label>
+<div class="money"><span>R$</span><input id="budget" inputmode="decimal" placeholder="0,00"></div>
+<span class="status" id="status"></span>
+</div>
+<div class="warn" id="warn"></div>
+</div>
+<div class="add">
+<input id="newName" placeholder="Nome do item" autocomplete="off">
+<select id="newCat"></select>
+<div class="row">
+<input id="newQty" inputmode="decimal" value="1" placeholder="Qtd.">
+<div class="money"><span>R$</span><input id="newPrice" inputmode="decimal" placeholder="0,00"></div>
+</div>
+<button class="btn-primary" id="addBtn">Adicionar item</button>
+</div>
+<div id="groups"></div>
+<div class="empty" id="empty">A lista está vazia. Adicione o primeiro item acima.</div>
+<div class="foot">
+<button class="ghost" id="clearDone">Remover marcados</button>
+<button class="ghost" id="clearAll">Limpar tudo</button>
+<button class="ghost wide" id="exportBtn">Exportar lista</button>
+</div>
+<div class="panel" id="panel">
+<h2>Prévia da exportação</h2>
+<textarea id="preview" readonly></textarea>
+<div class="row">
+<button class="ghost" id="copyBtn">Copiar texto</button>
+<button class="ghost" id="imgBtn">Baixar imagem</button>
+</div>
+<div class="row">
+<button class="ghost" id="txtBtn">Baixar .txt</button>
+<button class="ghost" id="closeBtn">Fechar</button>
+</div>
+</div>
+<p class="hint">Os valores e o orçamento ficam salvos neste aparelho.</p>
