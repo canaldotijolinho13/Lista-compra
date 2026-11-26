@@ -5,6 +5,7 @@ mkdir -p app/src/main/java/br/com/lista
 mkdir -p app/src/main/assets
 mkdir -p app/src/main/res/drawable
 mkdir -p app/src/main/res/values
+mkdir -p app/src/main/res/xml
 
 cat > settings.gradle.kts <<'GF'
 pluginManagement {
@@ -51,8 +52,8 @@ android {
         applicationId = "br.com.lista"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
     signingConfigs {
         create("release") {
@@ -81,6 +82,7 @@ android {
 }
 dependencies {
     implementation("androidx.webkit:webkit:1.12.1")
+    implementation("androidx.core:core-ktx:1.13.1")
 }
 GF
 
@@ -107,8 +109,24 @@ cat > app/src/main/AndroidManifest.xml <<'GF'
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.arquivos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>
+GF
+
+cat > app/src/main/res/xml/file_paths.xml <<'GF'
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path name="cache" path="." />
+</paths>
 GF
 
 cat > app/src/main/res/values/themes.xml <<'GF'
@@ -156,6 +174,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import androidx.core.content.FileProvider
 import androidx.webkit.WebViewAssetLoader
 import java.io.File
 
@@ -262,6 +281,38 @@ class MainActivity : Activity() {
                     Toast.makeText(this@MainActivity, "Salvo em Downloads", Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
                     Toast.makeText(this@MainActivity, "Falha ao salvar", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun compartilhar(base64: String, filename: String, mime: String, pacote: String) {
+            runOnUiThread {
+                try {
+                    val bytes = Base64.decode(base64, Base64.DEFAULT)
+                    val dir = File(cacheDir, "compartilhar")
+                    dir.mkdirs()
+                    val arquivo = File(dir, filename)
+                    arquivo.writeBytes(bytes)
+                    val uri = FileProvider.getUriForFile(
+                        this@MainActivity,
+                        packageName + ".arquivos",
+                        arquivo
+                    )
+                    val envio = Intent(Intent.ACTION_SEND).apply {
+                        type = mime
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    if (pacote.isNotEmpty()) envio.setPackage(pacote)
+                    try {
+                        startActivity(envio)
+                    } catch (e: Exception) {
+                        envio.setPackage(null)
+                        startActivity(Intent.createChooser(envio, "Compartilhar lista"))
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, "Falha ao compartilhar", Toast.LENGTH_SHORT).show()
                 }
             }
         }
