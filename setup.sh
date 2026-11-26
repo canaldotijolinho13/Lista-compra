@@ -74,6 +74,8 @@ cat > app/src/main/AndroidManifest.xml <<'GF'
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <application
         android:allowBackup="true"
@@ -121,16 +123,20 @@ GF
 cat > app/src/main/java/br/com/lista/MainActivity.kt <<'GF'
 package br.com.lista
 
+import android.Manifest
 import android.app.Activity
 import android.content.ContentValues
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Base64
 import android.view.ViewGroup
+import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -162,9 +168,19 @@ class MainActivity : Activity() {
             databaseEnabled = true
             allowFileAccess = false
             setSupportZoom(false)
+            setGeolocationEnabled(true)
         }
 
         web.addJavascriptInterface(Bridge(), "AndroidBridge")
+
+        web.webChromeClient = object : WebChromeClient() {
+            override fun onGeolocationPermissionsShowPrompt(
+                origin: String?,
+                callback: GeolocationPermissions.Callback?
+            ) {
+                callback?.invoke(origin, true, false)
+            }
+        }
 
         web.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(
@@ -186,8 +202,24 @@ class MainActivity : Activity() {
             }
         }
 
+        pedirLocalizacao()
+
         setContentView(web)
         web.loadUrl("https://appassets.androidplatform.net/assets/index.html")
+    }
+
+    private fun pedirLocalizacao() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ),
+                1
+            )
+        }
     }
 
     override fun onBackPressed() {
@@ -204,7 +236,8 @@ class MainActivity : Activity() {
                         val values = ContentValues().apply {
                             put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
                             put(MediaStore.MediaColumns.MIME_TYPE, mime)
-                            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLO                       }
+                            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                        }
                         val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
                         uri?.let { contentResolver.openOutputStream(it)?.use { s -> s.write(bytes) } }
                     } else {
