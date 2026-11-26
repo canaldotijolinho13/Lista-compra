@@ -22,6 +22,7 @@ jobs:
           cat app/src/main/assets/p5.txt >> app/src/main/assets/index.html
           cat app/src/main/assets/p6.txt >> app/src/main/assets/index.html
           cat app/src/main/assets/p7.txt >> app/src/main/assets/index.html
+          cat app/src/main/assets/p8.txt >> app/src/main/assets/index.html
           sed -i 's|<title>Lista de compras</title>|<title>Minha Lista de Compras</title>|' app/src/main/assets/index.html
           sed -i 's|<h1>Lista de compras</h1>|<h1>Minha Lista de Compras</h1>|' app/src/main/assets/index.html
           sed -i 's|android:label="Lista de compras"|android:label="Minha Lista de Compras"|' app/src/main/AndroidManifest.xml
@@ -45,5 +46,5 @@ jobs:
           path: app/build/outputs/apk/release/app-release.apk
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.${{ github.run_number }}
+          tag_name: v1.2.${{ github.run_number }}
           files: app/build/outputs/apk/release/app-release.apk
