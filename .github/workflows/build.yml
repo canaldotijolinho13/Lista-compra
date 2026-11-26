@@ -19,7 +19,9 @@ jobs:
       - run: bash setup.sh
       - name: Corrigir linha truncada
         run: |
-          sed -i 's/DIRECTORY_DOWNLO \+}/DIRECTORY_DOWNLOADS)/' app/src/main/java/br/com/lista/MainActivity.kt
+          F=app/src/main/java/br/com/lista/MainActivity.kt
+          sed -i 's/put(MediaStore.MediaColumns.RELATIVE_PATH.*/put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)\n                        }/' "$F"
+          grep -n -A2 "RELATIVE_PATH" "$F"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
